@@ -1,0 +1,2135 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>2FA Lucena Vault</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="otpauth.umd.min.js"></script>
+    <script src="popup.js" defer></script>
+    <style>
+      /* --- Reset & Variáveis --- */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+      }
+
+      ::-webkit-scrollbar {
+        width: 5px;
+        height: 5px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+      :root.dark ::-webkit-scrollbar-thumb {
+        background: #374151;
+      }
+      :root.dark ::-webkit-scrollbar-thumb:hover {
+        background: #4b5563;
+      }
+
+      :root {
+        /* Light Mode */
+        --primary: #de3538;
+        --text-main: #111827;
+        --text-sub: #6b7280;
+        --text-folder: #475569;
+        --timer-color: #4b5563;
+        --border: #e5e7eb;
+        --bg-body: #f9fafb;
+        --bg-surface: #ffffff;
+        --bg-card: #ffffff;
+        --bg-input: #f3f4f6;
+        --bg-hover: #e5e7eb;
+        --bg-icon: #ffffff;
+        --highlight-bg: #f0f9ff;
+        --success: #10b981;
+        --danger-light: #fee2e2;
+        --danger-border: #fecaca;
+        --danger-text: #b91c1c;
+        --drag-bg: #f9fafb;
+        --drag-border: #de3538;
+        --keyboard-focus: #2563eb;
+        --mode-active: #2563eb;
+        --card-sep: #e5e7eb;
+      }
+
+      :root.dark {
+        /* Dark Mode */
+        --text-main: #ffffff;
+        --text-sub: #9ca3af;
+        --text-folder: #e5e7eb;
+        --timer-color: #e5e7eb;
+        --border: #374151;
+        --bg-body: #111827;
+        --bg-surface: #1f2937;
+        --bg-card: #282a36;
+        --bg-input: #374151;
+        --bg-hover: #4b5563;
+        --bg-icon: #374151;
+        --highlight-bg: #1e293b;
+        --danger-light: #450a0a;
+        --danger-border: #7f1d1d;
+        --danger-text: #f87171;
+        --drag-bg: #374151;
+        --drag-border: #f87171;
+        --keyboard-focus: #60a5fa;
+        --mode-active: #60a5fa;
+        --card-sep: #374151;
+      }
+
+      html {
+        width: 100%;
+        height: 100%;
+        min-width: 350px;
+        min-height: 550px;
+        overflow: hidden;
+      }
+
+      body {
+        width: 100%;
+        height: 100%;
+        font-family: "Poppins", sans-serif;
+        background-color: var(--bg-body);
+        color: var(--text-main);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        margin: 0;
+        transition:
+          background-color 0.2s,
+          color 0.2s;
+      }
+
+      #fileInput {
+        display: none !important;
+      }
+
+      /* --- Lock Screen Fixed --- */
+      #lock-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: var(--bg-body);
+        z-index: 5000;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 20px;
+      }
+      #lock-screen.active {
+        display: flex;
+      }
+
+      .lock-icon {
+        width: 64px;
+        height: 64px;
+        color: var(--primary);
+        margin-bottom: 24px;
+      }
+      .lock-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--text-main);
+        margin-bottom: 8px;
+      }
+      .lock-subtitle {
+        font-size: 13px;
+        color: var(--text-sub);
+        margin-bottom: 32px;
+      }
+      .pin-input {
+        font-size: 24px;
+        letter-spacing: 12px;
+        text-align: center;
+        width: 180px;
+        padding: 12px;
+        margin-bottom: 32px;
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        background: var(--bg-input);
+        color: var(--text-main);
+        font-weight: 600;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .pin-input:focus {
+        border-color: var(--primary);
+      }
+      .pin-input.error {
+        border-color: var(--danger-text);
+        animation: shake 0.4s;
+      }
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-5px);
+        }
+        75% {
+          transform: translateX(5px);
+        }
+      }
+
+      /* --- Header --- */
+      header {
+        height: 60px;
+        padding: 0 16px;
+        background: var(--bg-surface);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-shrink: 0;
+        border-bottom: 1px solid var(--border);
+        z-index: 20;
+      }
+
+      .brand-area h1 {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--primary);
+        letter-spacing: -0.3px;
+        white-space: nowrap;
+      }
+
+      .header-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .toolbar-group {
+        display: flex;
+        align-items: center;
+        background-color: var(--bg-input);
+        padding: 4px;
+        border-radius: 10px;
+        gap: 2px;
+        border: 1px solid transparent;
+      }
+      :root.dark .toolbar-group {
+        border-color: var(--border);
+      }
+
+      .btn-header-action {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--text-sub);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        transition: all 0.2s;
+      }
+      .btn-header-action:hover {
+        color: var(--text-main);
+        background-color: var(--bg-surface);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+      .btn-header-action.active {
+        color: var(--primary);
+        background-color: var(--bg-surface);
+      }
+      .btn-header-action svg {
+        width: 18px;
+        height: 18px;
+        stroke-width: 2px;
+      }
+
+      .btn-header-add {
+        background: linear-gradient(135deg, var(--primary) 0%, #be123c 100%);
+        color: #fff;
+        border-radius: 10px;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 2px 5px rgba(222, 53, 56, 0.3);
+        transition: transform 0.2s;
+      }
+      .btn-header-add:hover {
+        transform: translateY(-1px);
+      }
+      .btn-header-add svg {
+        width: 20px;
+        height: 20px;
+        stroke-width: 2.5px;
+      }
+
+      /* --- Search --- */
+      .search-area {
+        padding: 8px 16px;
+        background: var(--bg-surface);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+        z-index: 19;
+      }
+      .search-bar-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        max-width: 1600px;
+        margin: 0 auto;
+      }
+      .search-wrapper {
+        position: relative;
+        flex: 1;
+      }
+      .search-input {
+        width: 100%;
+        padding: 8px 10px 8px 34px;
+        background: var(--bg-input);
+        border: 1px solid transparent;
+        border-radius: 8px;
+        font-family: "Poppins", sans-serif;
+        font-size: 13px;
+        outline: none;
+        color: var(--text-main);
+      }
+      .search-input:focus {
+        background: var(--bg-surface);
+        border-color: var(--primary);
+      }
+      .search-icon {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-sub);
+        width: 16px;
+        height: 16px;
+        pointer-events: none;
+      }
+      .btn-clear {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--text-sub);
+        display: none;
+        padding: 4px;
+      }
+      .search-wrapper.active .btn-clear {
+        display: block;
+      }
+
+      .btn-collapse {
+        width: 34px;
+        height: 34px;
+        background: var(--bg-input);
+        border: 1px solid transparent;
+        border-radius: 8px;
+        color: var(--text-sub);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .btn-collapse:hover {
+        background: var(--bg-hover);
+        color: var(--text-main);
+      }
+      .btn-collapse svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* --- Views --- */
+      .view-container {
+        flex: 1;
+        overflow: hidden;
+        display: none;
+        flex-direction: column;
+        width: 100%;
+      }
+      .view-container.active {
+        display: flex;
+      }
+
+      #codes-list-container {
+        flex: 1;
+        overflow-y: auto;
+        padding-bottom: 20px;
+        width: 100%;
+      }
+
+      /* Config View Scoped Styles */
+      #view-config {
+        overflow-y: auto;
+        padding: 16px;
+      }
+
+      #codes-list,
+      #suggested-section {
+        max-width: 1600px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      /* --- Folders & Grid --- */
+      .folder-header {
+        position: sticky;
+        top: 0;
+        z-index: 15;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        background-color: var(--bg-body);
+        cursor: pointer;
+      }
+      .folder-header::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+        margin-left: 8px;
+        opacity: 0.7;
+      }
+      .folder-title {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text-folder);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+      }
+      .folder-arrow {
+        order: -1;
+        color: var(--primary);
+        transition: transform 0.2s;
+      }
+      .folder-header.closed .folder-arrow {
+        transform: rotate(-90deg);
+        color: var(--text-sub);
+      }
+
+      .folder-content,
+      #suggested-section {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 10px;
+        padding: 4px 16px 8px 16px;
+      }
+      .folder-content.hidden {
+        display: none;
+      }
+
+      /* --- Token Card --- */
+      .token-card {
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s,
+          border-color 0.1s;
+        height: 100%;
+      }
+      .token-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.1);
+        border-color: var(--primary);
+        z-index: 10;
+      }
+      .token-card.suggested {
+        border-color: var(--primary);
+        box-shadow: 0 0 8px rgba(222, 53, 56, 0.2);
+      }
+      .token-card.key-active {
+        border-color: var(--keyboard-focus);
+        box-shadow: 0 0 0 2px var(--keyboard-focus);
+      }
+
+      .card-top {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px 6px 12px;
+        gap: 10px;
+      }
+      .card-icon-box {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        overflow: hidden;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+      }
+      .service-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .card-text {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .card-issuer {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-main);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.2;
+      }
+      .card-account {
+        font-size: 11px;
+        color: var(--text-sub);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.2;
+        margin-top: 1px;
+      }
+      .card-timer-wrap {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .card-separator {
+        height: 1px;
+        background-color: var(--card-sep);
+        margin: 0 12px;
+        opacity: 0.5;
+      }
+      .card-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 12px 8px 12px;
+      }
+      .card-code {
+        font-family: "Poppins", monospace;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text-main);
+        letter-spacing: 2px;
+        line-height: 1;
+        transition: filter 0.2s;
+      }
+      .card-code.copied {
+        color: var(--success);
+      }
+      body.masked .card-code,
+      body.masked .val-next {
+        filter: blur(6px);
+      }
+      .card-next {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        text-align: right;
+      }
+      .lbl-next {
+        font-size: 9px;
+        color: var(--text-sub);
+        font-weight: 500;
+        text-transform: uppercase;
+      }
+      .val-next {
+        font-family: monospace;
+        font-size: 10px;
+        color: var(--text-sub);
+        font-weight: 600;
+        letter-spacing: 1px;
+      }
+
+      /* Timer */
+      .timer-box {
+        position: relative;
+        width: 20px;
+        height: 20px;
+      }
+      .timer-svg {
+        transform: rotate(-90deg);
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .timer-circle {
+        transition: stroke-dashoffset 1s linear;
+        stroke: var(--timer-color);
+      }
+      .timer-num {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+        color: var(--timer-color);
+      }
+      .token-card.expiring .card-code,
+      .token-card.expiring .timer-num {
+        color: var(--primary);
+      }
+      .token-card.expiring .timer-circle {
+        stroke: var(--primary);
+      }
+
+      .btn-edit-card {
+        position: absolute;
+        right: 4px;
+        top: 4px;
+        width: 22px;
+        height: 22px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-sub);
+        z-index: 15;
+      }
+      .token-card:hover .btn-edit-card {
+        display: flex;
+      }
+      .btn-edit-card:hover {
+        color: var(--primary);
+        border-color: var(--primary);
+      }
+
+      .drag-handle {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-main);
+        cursor: grab;
+        opacity: 0;
+        pointer-events: none;
+        background: rgba(255, 255, 255, 0.8);
+        z-index: 20;
+      }
+      :root.dark .drag-handle {
+        background: rgba(0, 0, 0, 0.8);
+      }
+      body.reorder-active .drag-handle {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      /* --- COMPACT MODE (POPUP) OVERRIDES --- */
+      body.compact-mode .folder-content,
+      body.compact-mode #suggested-section {
+        grid-template-columns: 1fr;
+        gap: 4px;
+        padding: 8px 12px;
+      }
+      body.compact-mode .token-card {
+        display: grid;
+        grid-template-columns: 36px 1fr auto 40px;
+        grid-template-rows: 1fr 1fr;
+        column-gap: 10px;
+        row-gap: 0;
+        padding: 6px 10px;
+        height: 56px;
+        min-height: 0;
+        align-items: center;
+      }
+      body.compact-mode .card-top,
+      body.compact-mode .card-text,
+      body.compact-mode .card-bottom {
+        display: contents;
+      }
+      body.compact-mode .card-separator {
+        display: none;
+      }
+      body.compact-mode .lbl-next {
+        display: none;
+      }
+
+      body.compact-mode .card-icon-box {
+        grid-row: 1 / span 2;
+        grid-column: 1;
+        width: 36px;
+        height: 36px;
+      }
+
+      body.compact-mode .card-issuer {
+        grid-row: 1;
+        grid-column: 2;
+        font-size: 13px;
+        align-self: end;
+        margin-bottom: 1px;
+      }
+      body.compact-mode .card-account {
+        grid-row: 2;
+        grid-column: 2;
+        font-size: 10px;
+        align-self: start;
+        margin-top: 1px;
+        color: var(--text-sub);
+      }
+
+      body.compact-mode .card-code {
+        grid-row: 1;
+        grid-column: 3;
+        font-size: 16px;
+        font-weight: 600;
+        text-align: right;
+        align-self: end;
+        line-height: 1;
+        margin-bottom: 1px;
+      }
+
+      body.compact-mode .card-timer-wrap {
+        grid-row: 1 / span 2;
+        grid-column: 4;
+        align-self: center;
+        justify-self: center;
+        width: 36px;
+        height: 36px;
+        margin-bottom: 0;
+        transform: none;
+      }
+
+      body.compact-mode .card-next {
+        grid-row: 2;
+        grid-column: 3;
+        justify-content: flex-end;
+        flex-direction: row;
+        align-self: start;
+        margin-top: 2px;
+      }
+      body.compact-mode .val-next {
+        font-size: 11px;
+        opacity: 0.8;
+        font-family: monospace;
+      }
+
+      body.compact-mode .btn-edit-card {
+        top: 50%;
+        transform: translateY(-50%);
+        right: 2px;
+        width: 20px;
+        height: 20px;
+      }
+
+      /* Timer resize for compact mode */
+      body.compact-mode .timer-box {
+        width: 36px;
+        height: 36px;
+      }
+      body.compact-mode .timer-num {
+        font-size: 12px;
+      }
+
+      /* --- Config View --- */
+      .settings-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        margin-bottom: 24px;
+        display: flex;
+        flex-direction: column;
+      }
+      .settings-header {
+        padding: 16px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-hover);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .settings-header svg {
+        width: 20px;
+        height: 20px;
+        color: var(--primary);
+      }
+      .settings-title {
+        font-size: 14px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .settings-body {
+        padding: 20px;
+      }
+
+      .settings-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 16px;
+        margin-bottom: 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .settings-row.no-border {
+        border: none;
+        margin: 0;
+        padding: 0;
+        margin-bottom: 10px;
+      }
+      .setting-label {
+        font-size: 14px;
+        font-weight: 600;
+        display: block;
+      }
+      .setting-desc {
+        font-size: 12px;
+        color: var(--text-sub);
+      }
+
+      /* FOLDER LIST ESTILO "BACKUP" (Limpo e Ajustado) */
+      .folder-manage-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .folder-manage-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background-color: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 16px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .folder-manage-item:hover {
+        background-color: var(--bg-hover);
+        border-color: var(--primary);
+        transform: translateX(2px);
+      }
+      .folder-info {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        flex: 1;
+        margin-right: 12px;
+      }
+      .folder-name {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text-main);
+      }
+      .folder-count {
+        font-size: 11px;
+        color: var(--text-sub);
+        margin-top: 0;
+      }
+      .folder-arrow-icon {
+        color: var(--text-sub);
+        width: 18px;
+        height: 18px;
+        opacity: 0.6;
+      }
+
+      /* BIG ACTION BUTTONS (GRID) */
+      .settings-actions-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .big-action-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.2s;
+        height: 80px;
+        width: 100%;
+        text-align: center;
+      }
+      .big-action-btn:hover {
+        background-color: var(--bg-hover);
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      }
+      .big-action-btn svg {
+        width: 24px;
+        height: 24px;
+        margin-bottom: 8px;
+        color: var(--text-main);
+      }
+      .big-action-btn:hover svg {
+        color: var(--primary);
+      }
+      .big-action-btn span {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-main);
+      }
+
+      /* NAV BUTTONS */
+      .btn-nav-back {
+        background: none;
+        border: 1px solid var(--danger-border);
+        color: var(--danger-text);
+        font-weight: 600;
+        font-size: 11px;
+        cursor: pointer;
+        padding: 6px 12px;
+        border-radius: 6px;
+        transition: background 0.2s;
+      }
+      .btn-nav-back:hover {
+        background: var(--danger-light);
+      }
+
+      /* Toggles */
+      .toggle-switch {
+        position: relative;
+        width: 38px;
+        height: 20px;
+      }
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--border);
+        transition: 0.4s;
+        border-radius: 34px;
+      }
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+        background-color: white;
+        transition: 0.4s;
+        border-radius: 50%;
+      }
+      input:checked + .slider {
+        background-color: var(--primary);
+      }
+      input:checked + .slider:before {
+        transform: translateX(18px);
+      }
+      .toggle-switch.small {
+        width: 30px;
+        height: 16px;
+      }
+      .toggle-switch.small .slider:before {
+        width: 12px;
+        height: 12px;
+      }
+      .toggle-switch.small input:checked + .slider:before {
+        transform: translateX(14px);
+      }
+
+      .btn-full {
+        width: 100%;
+        padding: 12px;
+        border-radius: 8px;
+        border: none;
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        transition: all 0.2s;
+      }
+      .btn-import {
+        background: var(--bg-input);
+        color: var(--text-main);
+        border: 1px solid var(--border);
+      }
+      .btn-import:hover {
+        background: var(--bg-hover);
+        border-color: var(--primary);
+      }
+      .btn-new-folder {
+        background: #111827;
+        color: #fff;
+      }
+      .btn-danger {
+        background: var(--danger-light);
+        color: var(--danger-text);
+        border: 1px solid var(--danger-border);
+      }
+      .btn-save-green {
+        background: var(--success) !important;
+        color: #fff;
+      }
+
+      /* --- Bottom Nav --- */
+      .bottom-nav {
+        height: 56px;
+        background: var(--bg-surface);
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        flex-shrink: 0;
+      }
+      .nav-item {
+        background: none;
+        border: none;
+        cursor: pointer;
+        flex: 1;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        color: var(--text-sub);
+        font-size: 10px;
+        font-weight: 600;
+        opacity: 0.7;
+      }
+      .nav-item.active {
+        color: var(--primary);
+        opacity: 1;
+      }
+      .nav-item svg {
+        width: 22px;
+        height: 22px;
+        stroke-width: 2px;
+      }
+
+      /* --- Modals --- */
+      .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--bg-surface);
+        z-index: 100;
+        display: none;
+        flex-direction: column;
+      }
+      .modal.active {
+        display: flex;
+      }
+      .modal.center {
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.5);
+      }
+      .modal.center .modal-content {
+        background: var(--bg-surface);
+        width: 85%;
+        max-width: 320px;
+        padding: 24px;
+        border-radius: 16px;
+        text-align: center;
+        animation: popIn 0.2s ease-out;
+      }
+      @keyframes popIn {
+        from {
+          opacity: 0;
+          transform: scale(0.9);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      .modal.bottom {
+        align-items: flex-end;
+        background: rgba(0, 0, 0, 0.5);
+      }
+      .modal.bottom .modal-content {
+        background: var(--bg-surface);
+        width: 100%;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        animation: slideUp 0.2s ease-out;
+      }
+      @keyframes slideUp {
+        from {
+          transform: translateY(100%);
+        }
+        to {
+          transform: translateY(0);
+        }
+      }
+      .modal-header {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .modal-body {
+        padding: 16px;
+        overflow-y: auto;
+        flex: 1;
+      }
+
+      .import-options-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .mini-card-import {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+        cursor: pointer;
+        background: var(--bg-input);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .mini-card-import:hover {
+        border-color: var(--primary);
+        background: var(--bg-hover);
+      }
+      .mini-card-import svg {
+        width: 24px;
+        height: 24px;
+        margin-bottom: 8px;
+        color: var(--primary);
+      }
+
+      .add-option-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 24px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--bg-input);
+        cursor: pointer;
+        margin-bottom: 12px;
+      }
+      .add-option-btn:hover {
+        border-color: var(--primary);
+        background: var(--bg-hover);
+      }
+      .add-option-btn svg {
+        width: 32px;
+        height: 32px;
+        margin-bottom: 8px;
+        color: var(--primary);
+      }
+
+      .form-input,
+      .form-select {
+        width: 100%;
+        padding: 8px;
+        margin-top: 4px;
+        margin-bottom: 12px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg-input);
+        color: var(--text-main);
+        font-family: "Poppins";
+      }
+      .icon-config-section {
+        background: var(--bg-input);
+        padding: 12px;
+        border-radius: 8px;
+        text-align: center;
+      }
+      .icon-preview-img {
+        width: 64px;
+        height: 64px;
+        object-fit: contain;
+      }
+      .icon-type-selector {
+        display: flex;
+        background: var(--bg-surface);
+        padding: 2px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        margin: 10px 0;
+      }
+      .icon-type-option {
+        flex: 1;
+        padding: 6px;
+        font-size: 11px;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      .icon-type-option.active {
+        background: var(--bg-hover);
+        color: var(--primary);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+      .empty-state {
+        text-align: center;
+        color: var(--text-sub);
+        margin-top: 80px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Lock Screen -->
+    <div id="lock-screen">
+      <svg
+        class="lock-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      </svg>
+      <div class="lock-title">Cofre Bloqueado</div>
+      <div class="lock-subtitle">Digite seu PIN para acessar</div>
+      <input
+        type="password"
+        id="lockPinInput"
+        class="pin-input"
+        maxlength="4"
+        inputmode="numeric"
+      />
+      <button
+        id="btnUnlock"
+        class="btn-full btn-new-folder"
+        style="width: auto; padding: 10px 32px"
+      >
+        Desbloquear
+      </button>
+    </div>
+
+    <!-- Header -->
+    <header>
+      <div class="brand-area">
+        <h1>Lucena Vault</h1>
+      </div>
+      <div class="header-toolbar">
+        <div class="toolbar-group">
+          <button
+            id="btnPopOut"
+            class="btn-header-action"
+            title="Abrir em Janela"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path
+                d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+              ></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </button>
+          <button
+            id="btnToggleTheme"
+            class="btn-header-action"
+            title="Alternar Tema"
+          >
+            <svg
+              id="iconMoon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+            <svg
+              id="iconSun"
+              class="hidden"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </button>
+          <button
+            id="btnToggleMask"
+            class="btn-header-action"
+            title="Ocultar Códigos"
+          >
+            <svg
+              id="iconEyeOpen"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg
+              id="iconEyeClosed"
+              class="hidden"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path
+                d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+              ></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+          <button
+            id="btnToggleReorder"
+            class="btn-header-action"
+            title="Reordenar"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path
+                d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"
+              ></path>
+            </svg>
+          </button>
+        </div>
+        <button id="btnHomeAdd" class="btn-header-add" title="Adicionar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Search Area -->
+    <div class="search-area">
+      <div class="search-bar-row">
+        <div class="search-wrapper" id="searchWrapper">
+          <svg
+            class="search-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            type="text"
+            id="searchInput"
+            class="search-input"
+            placeholder="Buscar..."
+          />
+          <button id="btnClearSearch" class="btn-clear">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <button
+          id="btnCollapseAll"
+          class="btn-collapse"
+          title="Expandir/Recolher"
+        >
+          <svg
+            id="iconCollapse"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <polyline points="4 14 12 6 20 14"></polyline>
+          </svg>
+          <svg
+            id="iconExpand"
+            class="hidden"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Codes View -->
+    <div id="view-codes" class="view-container active">
+      <div id="codes-list-container">
+        <div id="suggested-section" class="hidden"></div>
+        <div id="codes-list"></div>
+        <div id="emptyState" class="empty-state hidden">
+          <p>Nenhum token encontrado.</p>
+          <p>Clique em + para adicionar.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Config View -->
+    <div id="view-config" class="view-container">
+      <div class="settings-card">
+        <div class="settings-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+            ></path>
+          </svg>
+          <span class="settings-title">Preferências</span>
+        </div>
+        <div class="settings-body">
+          <div class="settings-row">
+            <div class="setting-info">
+              <span class="setting-label">Painel Lateral</span>
+              <span class="setting-desc"
+                >Abrir extensão na barra lateral do navegador.</span
+              >
+            </div>
+            <label class="toggle-switch small">
+              <input type="checkbox" id="toggleSidePanel" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="settings-row">
+            <div class="setting-info">
+              <span class="setting-label">Sincronização Nuvem</span>
+              <span class="setting-desc"
+                >Backup automático na conta Google.<br /><span
+                  id="sync-status-indicator"
+                ></span
+              ></span>
+            </div>
+            <label class="toggle-switch small">
+              <input type="checkbox" id="toggleCloudSync" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <button id="btnForceSync" class="btn-full btn-import">
+            Sincronizar Agora
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <span class="settings-title">Segurança</span>
+        </div>
+        <div class="settings-body">
+          <div class="settings-row no-border">
+            <div class="setting-info">
+              <span class="setting-label">Bloqueio Automático</span>
+            </div>
+          </div>
+          <select id="autoLockSelect" class="form-select">
+            <option value="0">Nunca</option>
+            <option value="60000">1 minuto</option>
+            <option value="300000">5 minutos</option>
+            <option value="900000">15 minutos</option>
+            <option value="3600000">1 hora</option>
+          </select>
+          <div id="pin-status-none">
+            <button id="btnSetupPin" class="btn-full btn-new-folder">
+              Configurar PIN
+            </button>
+          </div>
+          <div id="pin-status-active" class="hidden">
+            <button id="btnRemovePin" class="btn-full btn-danger">
+              Desativar PIN
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path
+              d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+            ></path>
+          </svg>
+          <span class="settings-title">Organização</span>
+        </div>
+        <div class="settings-body">
+          <button
+            id="btnNewFolder"
+            class="btn-full btn-import"
+            style="border-style: dashed"
+          >
+            + Criar Nova Pasta
+          </button>
+          <div id="folders-manage-list"></div>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span class="settings-title">Dados e Backup</span>
+        </div>
+        <div class="settings-body">
+          <div class="settings-actions-grid">
+            <button id="btnExport" class="big-action-btn">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <span>Exportar</span>
+            </button>
+            <button id="btnImport" class="big-action-btn">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Importar</span>
+            </button>
+          </div>
+          <button
+            id="btnSortAlpha"
+            class="btn-full btn-import"
+            style="margin-top: 10px"
+          >
+            Ordenar de A a Z
+          </button>
+          <div
+            style="
+              margin-top: 24px;
+              padding-top: 16px;
+              border-top: 1px solid var(--border);
+            "
+          >
+            <button id="btnWipe" class="btn-full btn-danger">
+              Apagar Tudo (Reset)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div
+        style="
+          text-align: center;
+          margin-bottom: 20px;
+          color: var(--text-sub);
+          font-size: 11px;
+        "
+      >
+        Lucena Vault v1.2
+      </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <nav class="bottom-nav">
+      <button id="nav-codes" class="nav-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>
+        Tokens
+      </button>
+      <button id="nav-config" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+          ></path>
+        </svg>
+        Ajustes
+      </button>
+    </nav>
+
+    <!-- Modals -->
+    <div id="add-method-modal" class="modal bottom">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Adicionar Novo</h3>
+          <button id="btnCancelAddMethod" class="btn-nav-back">Fechar</button>
+        </div>
+        <div class="modal-body" style="padding: 20px">
+          <div class="import-options-grid" style="grid-template-columns: 1fr">
+            <div class="add-option-btn" id="btnMethodScan">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+                <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+                <rect x="7" y="7" width="10" height="10" rx="2"></rect>
+              </svg>
+              <span class="add-option-label">Escanear QR Code</span
+              ><span style="font-size: 11px; color: var(--text-sub)"
+                >Detecta na tela atual</span
+              >
+            </div>
+            <div class="add-option-btn" id="btnMethodManual">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path
+                  d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                ></path>
+                <path
+                  d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                ></path>
+              </svg>
+              <span class="add-option-label">Entrada Manual</span
+              ><span style="font-size: 11px; color: var(--text-sub)"
+                >Digitar chave secreta</span
+              >
+            </div>
+            <div class="add-option-btn" id="btnMethodImport">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span class="add-option-label">Importar Backup</span
+              ><span style="font-size: 11px; color: var(--text-sub)"
+                >JSON, 2FAS, etc</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="manual-add-modal" class="modal bottom">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Novo Token</h3>
+          <button id="btnCloseManual" class="btn-nav-back">Cancelar</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="config-label">Título (Linha 1)</label
+            ><input
+              type="text"
+              id="manualIssuer"
+              class="form-input"
+              placeholder="Ex: Google"
+            />
+          </div>
+          <div class="form-group">
+            <label class="config-label">Subtítulo (Linha 2)</label
+            ><input
+              type="text"
+              id="manualAccount"
+              class="form-input"
+              placeholder="Ex: usuario@gmail.com"
+            />
+          </div>
+          <div class="form-group">
+            <label class="config-label">Chave Secreta</label
+            ><input
+              type="text"
+              id="manualSecret"
+              class="form-input"
+              style="font-family: monospace; text-transform: uppercase"
+            />
+          </div>
+
+          <div class="config-label" style="margin-top: 20px">Ícone</div>
+          <div class="icon-config-section">
+            <div class="icon-preview-area">
+              <img
+                src="icon.png"
+                id="manualIconPreview"
+                class="icon-preview-img"
+              />
+            </div>
+            <div class="form-group">
+              <label class="config-label">Emissor (Para Ícone Automático)</label
+              ><input
+                type="text"
+                id="manualIconIssuer"
+                class="form-input"
+                placeholder="Ex: google"
+              />
+            </div>
+            <div id="iconInputUrl" class="hidden">
+              <input type="text" id="manualIconUrl" class="form-input" />
+            </div>
+          </div>
+          <button
+            id="btnSaveManual"
+            class="btn-full btn-new-folder"
+            style="margin-top: 20px"
+          >
+            Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-import-type" class="modal bottom">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Importar</h3>
+          <button id="btnCancelImportType" class="btn-nav-back">
+            Cancelar
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="import-options-grid">
+            <div class="mini-card-import" id="btnImport2FAS">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Backup 2FAS</span>
+            </div>
+            <div class="mini-card-import" id="btnImportOther">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                ></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+              </svg>
+              <span>JSON Genérico</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="encrypt-modal" class="modal center">
+      <div class="modal-content">
+        <h3>Proteger Backup?</h3>
+        <p style="font-size: 12px; color: var(--text-sub); margin-bottom: 15px">
+          Você pode definir uma senha para criptografar o arquivo.
+        </p>
+        <button id="btnEncryptToggle" class="btn-full btn-new-folder">
+          Definir Senha
+        </button>
+        <div id="encrypt-inputs" class="hidden">
+          <input
+            type="password"
+            id="encryptPass"
+            class="form-input"
+            placeholder="Senha"
+          />
+          <input
+            type="password"
+            id="encryptPassConfirm"
+            class="form-input"
+            placeholder="Confirmar Senha"
+          />
+        </div>
+        <button
+          id="btnEncryptConfirm"
+          class="btn-full btn-new-folder"
+          style="display: none"
+        >
+          Confirmar e Baixar
+        </button>
+        <button id="btnEncryptSkip" class="btn-full btn-import">
+          Baixar sem Senha
+        </button>
+        <button
+          id="btnEncryptCancel"
+          class="btn-full btn-danger"
+          style="background: none; border: none; color: var(--danger-text)"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+
+    <div id="decrypt-modal" class="modal center">
+      <div class="modal-content">
+        <h3>Arquivo Criptografado</h3>
+        <p style="font-size: 12px; color: var(--text-sub); margin-bottom: 15px">
+          Digite a senha para restaurar este backup.
+        </p>
+        <input
+          type="password"
+          id="decryptPass"
+          class="form-input"
+          placeholder="Senha"
+          style="margin-bottom: 15px"
+        />
+        <button id="btnDecryptConfirm" class="btn-full btn-new-folder">
+          Descriptografar
+        </button>
+        <button
+          id="btnDecryptCancel"
+          class="btn-full btn-danger"
+          style="background: none; border: none; color: var(--danger-text)"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+
+    <div id="token-modal" class="modal bottom">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Editar Token</h3>
+          <button id="btnCloseToken" class="btn-nav-back">Cancelar</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editTokenId" />
+          <div class="form-group">
+            <label class="config-label">Título</label
+            ><input type="text" id="editTokenTitle" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="config-label">Subtítulo</label
+            ><input type="text" id="editTokenSubtitle" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="config-label">Emissor</label
+            ><input type="text" id="editTokenIssuer" class="form-input" />
+          </div>
+
+          <div class="config-label" style="margin-top: 15px">Ícone</div>
+          <div class="icon-config-section">
+            <div class="icon-preview-area">
+              <img id="iconPreview" src="icon.png" class="icon-preview-img" />
+            </div>
+            <div class="icon-type-selector">
+              <div class="icon-type-option active" data-type="auto">Auto</div>
+              <div class="icon-type-option" data-type="url">URL</div>
+              <div class="icon-type-option" data-type="custom">Upload</div>
+            </div>
+            <div
+              id="iconInputAuto"
+              style="
+                text-align: center;
+                font-size: 11px;
+                color: var(--text-sub);
+                padding: 8px;
+              "
+            >
+              Usa o nome do Emissor para buscar o ícone.
+            </div>
+            <div id="iconInputUrl" class="hidden">
+              <input
+                type="text"
+                id="editTokenIconUrl"
+                class="form-input"
+                placeholder="URL do ícone"
+              />
+            </div>
+            <div id="iconInputCustom" class="hidden" style="text-align: center">
+              <input
+                type="file"
+                id="iconFileInput"
+                accept="image/*"
+                style="font-size: 11px"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="config-label">Chave Secreta</label
+            ><input
+              type="text"
+              id="editTokenSecret"
+              class="form-input"
+              style="font-family: monospace"
+            />
+          </div>
+          <div class="form-group">
+            <label class="config-label">Pasta</label
+            ><select id="editTokenFolder" class="form-select"></select>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 20px">
+            <button
+              id="btnDeleteToken"
+              class="btn-full btn-danger"
+              style="flex: 1"
+            >
+              Excluir
+            </button>
+            <button
+              id="btnSaveToken"
+              class="btn-full btn-save-green"
+              style="flex: 2"
+            >
+              Salvar Alterações
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="folder-modal" class="modal bottom">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Gerenciar Pasta</h3>
+          <button id="btnCloseFolder" class="btn-nav-back">Concluir</button>
+        </div>
+        <div
+          class="modal-body"
+          style="height: 80vh; display: flex; flex-direction: column"
+        >
+          <div class="form-group">
+            <label class="config-label">Nome da Pasta</label>
+            <div style="display: flex; gap: 8px">
+              <input type="text" id="editFolderName" class="form-input" />
+              <button
+                id="btnDeleteFolder"
+                style="
+                  background: var(--danger-light);
+                  color: var(--danger-text);
+                  border: 1px solid var(--danger-border);
+                  border-radius: 8px;
+                  padding: 0 12px;
+                  cursor: pointer;
+                "
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path
+                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                  ></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div
+            style="
+              margin-top: 10px;
+              border-bottom: 1px solid var(--border);
+              padding-bottom: 8px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <span class="config-label" style="margin: 0"
+              >Itens nesta pasta</span
+            >
+            <button
+              id="btnToggleSelectAll"
+              style="
+                font-size: 11px;
+                color: var(--primary);
+                background: none;
+                border: none;
+                cursor: pointer;
+              "
+            >
+              Mover Todos
+            </button>
+          </div>
+          <input
+            type="text"
+            id="filterFolderItems"
+            class="form-input"
+            placeholder="Filtrar itens..."
+            style="margin-bottom: 10px"
+          />
+          <div
+            id="folder-items-checklist"
+            style="flex: 1; overflow-y: auto"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="new-folder-modal" class="modal center">
+      <div class="modal-content">
+        <h3>Nova Pasta</h3>
+        <input
+          type="text"
+          id="newFolderNameInput"
+          class="form-input"
+          placeholder="Nome da Pasta"
+          style="margin: 15px 0"
+        />
+        <div style="display: flex; gap: 10px">
+          <button id="btnCancelNewFolder" class="btn-full btn-import">
+            Cancelar</button
+          ><button id="btnSaveNewFolder" class="btn-full btn-new-folder">
+            Criar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pin-creation-modal" class="modal center">
+      <div class="modal-content">
+        <h3>Segurança</h3>
+        <p style="font-size: 12px; color: var(--text-sub); margin-bottom: 15px">
+          Crie um PIN de 4 dígitos para proteger o acesso.
+        </p>
+        <div class="pin-create-wrapper">
+          <input
+            type="password"
+            id="newPinInput"
+            class="form-input"
+            placeholder="Novo PIN"
+            maxlength="4"
+            inputmode="numeric"
+          />
+          <button id="btnToggleNewPin" class="btn-pin-eye">
+            <svg
+              id="eyeNewOpen"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg
+              id="eyeNewClosed"
+              class="hidden"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path
+                d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+              ></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+        </div>
+        <input
+          type="password"
+          id="confirmPinInput"
+          class="form-input"
+          placeholder="Confirmar PIN"
+          maxlength="4"
+          inputmode="numeric"
+          style="margin-bottom: 15px"
+        />
+        <div style="display: flex; gap: 10px">
+          <button id="btnCancelPinSetup" class="btn-full btn-import">
+            Cancelar</button
+          ><button id="btnSavePin" class="btn-full btn-new-folder">
+            Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirm-modal" class="modal center">
+      <div class="modal-content">
+        <h3 id="confirmTitle">Confirmar</h3>
+        <p
+          id="confirmMessage"
+          style="font-size: 13px; color: var(--text-sub); margin: 10px 0 20px 0"
+        >
+          ...
+        </p>
+        <div style="display: flex; gap: 10px">
+          <button id="btnConfirmCancel" class="btn-full btn-import">
+            Cancelar</button
+          ><button id="btnConfirmOk" class="btn-full btn-new-folder">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="alert-modal" class="modal center">
+      <div class="modal-content">
+        <div id="alertIcon" style="font-size: 32px; margin-bottom: 10px"></div>
+        <h3 id="alertTitle">Titulo</h3>
+        <p
+          id="alertMessage"
+          style="font-size: 13px; color: var(--text-sub); margin: 5px 0 20px 0"
+        >
+          ...
+        </p>
+        <button id="btnAlertOk" class="btn-full btn-new-folder">OK</button>
+      </div>
+    </div>
+
+    <input type="file" id="fileInput" accept=".json,.txt,.2fas" />
+  </body>
+</html>

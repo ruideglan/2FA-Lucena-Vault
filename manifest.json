@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "2FA Lucena Vault",
+  "version": "3.6",
+  "description": "Autenticador Pro com modo Híbrido e Segurança PIN.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "sidePanel",
+    "tabs",
+    "scripting"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Abrir Cofre"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "icons": {
+    "128": "icon.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
