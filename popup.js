@@ -1196,7 +1196,7 @@ async function renderCodesView() {
   document.getElementById("emptyState").classList.add("hidden");
 
   // Sugestões inteligentes (baseado na aba ativa)
-  let suggestedItem = null;
+  let suggestedItems = [];
   if (!query) {
     try {
       const [tab] = await chrome.tabs.query({
@@ -1205,22 +1205,35 @@ async function renderCodesView() {
       });
       if (tab?.url && !tab.url.startsWith("chrome://")) {
         const hostname = new URL(tab.url).hostname.toLowerCase();
-        suggestedItem = vaultItems.find((i) => {
-          const candidates = [i.issuer, i.line1];
-          return candidates.some((c) => {
-            if (!c) return false;
-            const clean = c.toLowerCase().replace(/[^a-z0-9]/g, "");
-            if (clean.length < 3) return false;
-            return hostname.includes(clean);
-          });
-        });
+        suggestedItems = vaultItems
+          .filter((i) => {
+            const candidates = [i.issuer, i.line1];
+            return candidates.some((c) => {
+              if (!c) return false;
+              const clean = c.toLowerCase().replace(/[^a-z0-9]/g, "");
+              if (clean.length < 3) return false;
+              return hostname.includes(clean);
+            });
+          })
+          .slice(0, 2); // Pega até 2 itens
       }
     } catch (e) {}
   }
 
-  if (suggestedItem && !query) {
-    suggestedDiv.innerHTML = createCard(suggestedItem);
-    suggestedDiv.querySelector(".token-card").classList.add("suggested");
+  if (suggestedItems.length > 0 && !query) {
+    const labelHtml = `<div class="suggested-label">Sugestão</div>`;
+    const cardsHtml = suggestedItems
+      .map((item) => {
+        let cardHtml = createCard(item);
+        // Injeta a classe 'suggested' no HTML do card
+        return cardHtml.replace(
+          'class="token-card',
+          'class="token-card suggested',
+        );
+      })
+      .join("");
+
+    suggestedDiv.innerHTML = `${labelHtml}<div class="suggested-items-container">${cardsHtml}</div>`;
     suggestedDiv.classList.remove("hidden");
   } else {
     suggestedDiv.classList.add("hidden");
