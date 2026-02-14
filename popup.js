@@ -10,11 +10,12 @@ let isReorderMode = false;
 let selectedIndex = -1;
 let useCloudSync = false;
 const UNCLASSIFIED_ID = "unclassified";
+const SIMPLES_ICONS_BASE = "https://cdn.simpleicons.org/";
 
 // Variaveis Temporárias (Importação)
 let pendingImportData = null;
 
-// Temporary state for Icon Editor
+// Estado temporário para Editor de Ícones
 let currentIconType = "auto"; // 'auto', 'url', 'custom'
 let currentIconCustomBase64 = null;
 
@@ -24,8 +25,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     .getViews({ type: "popup" })
     .includes(window);
 
-  // Alteração: Ativa modo Compacto APENAS se for Popup.
-  // O Painel Lateral (Side Panel) manterá o layout padrão (cards completos).
+  // Ativa modo Compacto APENAS se for Popup.
   if (isPopupView) {
     document.body.classList.add("compact-mode");
   }
@@ -43,9 +43,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     "useCloudSync",
   ]);
 
-  vaultItems = data.vaultItems || [];
-  folders = data.folders || [];
-  customServices = data.customServices || [];
+  vaultItems = Array.isArray(data.vaultItems) ? data.vaultItems : [];
+  folders = Array.isArray(data.folders) ? data.folders : [];
+  customServices = Array.isArray(data.customServices) ? data.customServices : [];
   vaultPinHash = data.vaultPinHash || null;
   autoLockTime = data.autoLockTime || 0;
   lastUnlockTime = data.lastUnlockTime || 0;
@@ -63,7 +63,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (lockSelect) lockSelect.value = autoLockTime;
 
   // Configura UI de Sync
-  document.getElementById("toggleCloudSync").checked = useCloudSync;
+  const toggleCloud = document.getElementById("toggleCloudSync");
+  if(toggleCloud) toggleCloud.checked = useCloudSync;
   updateSyncStatusUI(false);
 
   // Lógica de Bloqueio na Abertura
@@ -92,7 +93,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 function initApp(data) {
   const toggle = document.getElementById("toggleSidePanel");
-  // Se for undefined ou false, fica desmarcado (Popup). Só marca se for explicitamente true.
   if (toggle) toggle.checked = data.useSidePanel === true;
 
   if (vaultItems.length === 0)
@@ -116,14 +116,13 @@ function setupCloudSyncListener() {
     // Se a mudança veio da nuvem (outro dispositivo)
     if (namespace === "sync" && useCloudSync) {
       console.log("Detectada alteração na nuvem...");
-      // Mescla simples: Cloud vence Local
       if (changes.vaultItems) vaultItems = changes.vaultItems.newValue || [];
       if (changes.folders) folders = changes.folders.newValue || [];
 
       // Salva no local para persistir
       chrome.storage.local.set({ vaultItems, folders });
 
-      updateSyncStatusUI(true);
+      updateSyncStatusUI(true, "Sincronizado via Nuvem");
       renderCodesView();
       renderConfigView();
     }
@@ -135,7 +134,6 @@ async function syncLocalToCloud() {
 
   updateSyncStatusUI(false, "Sincronizando...");
 
-  // Tenta salvar no chrome.storage.sync
   try {
     await chrome.storage.sync.set({
       vaultItems: vaultItems,
@@ -145,7 +143,7 @@ async function syncLocalToCloud() {
     updateSyncStatusUI(true, "Sincronizado");
   } catch (e) {
     console.error("Erro ao sincronizar nuvem:", e);
-    if (e.message.includes("QUOTA_BYTES")) {
+    if (e.message && e.message.includes("QUOTA_BYTES")) {
       updateSyncStatusUI(false, "Erro: Limite da Nuvem Excedido");
       showAlert(
         "Erro de Sincronização",
@@ -168,8 +166,6 @@ async function syncFromCloudToLocal() {
       "lastSynced",
     ]);
     if (cloudData.lastSynced) {
-      // Poderia ter lógica de merge baseada em timestamps aqui
-      // Por enquanto, assumimos que nuvem é a verdade se existir dados
       if (cloudData.vaultItems && cloudData.vaultItems.length > 0) {
         vaultItems = cloudData.vaultItems;
       }
@@ -241,7 +237,6 @@ function lockApp() {
   document.getElementById("lockPinInput").focus();
 }
 
-// Hash Simples para o PIN (SHA-256)
 async function sha256(message) {
   const msgBuffer = new TextEncoder().encode(message);
   const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
@@ -347,7 +342,7 @@ async function decryptData(encryptedObj, password) {
 }
 
 function bindCryptoEvents() {
-  // Fluxo de Exportação
+  // Exportação
   document.getElementById("btnExport").addEventListener("click", () => {
     document.getElementById("encrypt-inputs").classList.add("hidden");
     document.getElementById("btnEncryptToggle").classList.remove("hidden");
@@ -386,7 +381,7 @@ function bindCryptoEvents() {
     document.getElementById("encrypt-modal").classList.remove("active");
   });
 
-  // Fluxo de Importação (Descriptografar)
+  // Importação (Descriptografar)
   document.getElementById("btnDecryptCancel").addEventListener("click", () => {
     document.getElementById("decrypt-modal").classList.remove("active");
     document.getElementById("fileInput").value = "";
@@ -441,11 +436,10 @@ async function performExport(password) {
 }
 
 // ======================================================
-// 3. LEITURA DE QR CODE (SCAN SCREEN)
+// 3. LEITURA DE QR CODE
 // ======================================================
 
 async function scanScreen() {
-  // 1. Tenta API Nativa (Chrome 88+)
   if ("BarcodeDetector" in window) {
     try {
       const tabs = await chrome.tabs.query({
@@ -471,23 +465,22 @@ async function scanScreen() {
       }
 
       processScannedUrl(barcodes[0].rawValue);
-      return; // Sucesso
+      return; 
     } catch (e) {
       console.warn("Scan nativo falhou, tentando fallback...", e);
     }
   }
 
-  // 2. Fallback / Aviso
   showAlert(
     "Recurso Experimental",
-    "A leitura nativa de QR Code falhou.\n\nPara ativar, acesse chrome://flags e habilite 'Experimental Web Platform features'.\n\nCaso contrário, use a Entrada Manual.",
+    "A leitura nativa de QR Code falhou.\n\nPara ativar, acesse chrome://flags e habilite 'Experimental Web Platform features'.",
     "❌",
   );
 }
 
 function processScannedUrl(rawValue) {
   if (!rawValue.startsWith("otpauth://")) {
-    showAlert("Erro", "QR Code encontrado, mas não é de 2FA (otpauth).", "❌");
+    showAlert("Erro", "QR Code inválido (não é otpauth).", "❌");
     return;
   }
 
@@ -506,18 +499,19 @@ function processScannedUrl(rawValue) {
   }
 
   if (!secret) {
-    showAlert("Erro", "QR Code inválido (sem segredo).", "❌");
+    showAlert("Erro", "QR Code sem segredo.", "❌");
     return;
   }
 
-  // Preencher Modal Manual
   document.getElementById("manualIssuer").value = issuer;
   document.getElementById("manualAccount").value = account;
   document.getElementById("manualIconIssuer").value = issuer;
   document.getElementById("manualSecret").value = secret;
-  // document.getElementById("manualIsDirect").checked = false; // Removido da UI
+  
+  // Reset icon state for clean manual entry
+  currentIconCustomBase64 = null;
+  setEditIconType("auto");
 
-  // Fecha modal de escolha e abre o de adição
   document.getElementById("add-method-modal").classList.remove("active");
   document.getElementById("manual-add-modal").classList.add("active");
 }
@@ -620,11 +614,9 @@ function updateSelectionVisuals(cards = getVisibleCards()) {
 // ======================================================
 
 function bindEvents() {
-  // Botão Pop-out
   const btnPopOut = document.getElementById("btnPopOut");
   if (btnPopOut) btnPopOut.addEventListener("click", openPopout);
 
-  // Botão ADD (Abre Menu de Escolha de Scan)
   const btnHomeAdd = document.getElementById("btnHomeAdd");
   if (btnHomeAdd) {
     btnHomeAdd.addEventListener("click", () => {
@@ -632,14 +624,16 @@ function bindEvents() {
     });
   }
 
-  document
-    .getElementById("btnMethodScan")
-    .addEventListener("click", scanScreen);
+  document.getElementById("btnMethodScan").addEventListener("click", scanScreen);
   document.getElementById("btnMethodManual").addEventListener("click", () => {
     document.getElementById("manualIssuer").value = "";
     document.getElementById("manualAccount").value = "";
     document.getElementById("manualIconIssuer").value = "";
     document.getElementById("manualSecret").value = "";
+    
+    // Reset icon state
+    currentIconCustomBase64 = null;
+    setEditIconType("auto");
 
     document.getElementById("add-method-modal").classList.remove("active");
     document.getElementById("manual-add-modal").classList.add("active");
@@ -650,25 +644,18 @@ function bindEvents() {
     document.getElementById("modal-import-type").classList.add("active");
   });
 
-  document
-    .getElementById("btnCancelAddMethod")
-    .addEventListener("click", () => {
+  document.getElementById("btnCancelAddMethod").addEventListener("click", () => {
       document.getElementById("add-method-modal").classList.remove("active");
-    });
+  });
 
-  // --- Import Modal UI ---
-  // Abre o modal de escolha ao clicar em "Importar Backup"
   document.getElementById("btnImport").addEventListener("click", () => {
     document.getElementById("modal-import-type").classList.add("active");
   });
 
-  document
-    .getElementById("btnCancelImportType")
-    .addEventListener("click", () => {
+  document.getElementById("btnCancelImportType").addEventListener("click", () => {
       document.getElementById("modal-import-type").classList.remove("active");
-    });
+  });
 
-  // Botões do Modal de Importação
   document.getElementById("btnImport2FAS").addEventListener("click", () => {
     document.getElementById("modal-import-type").classList.remove("active");
     document.getElementById("fileInput").click();
@@ -679,7 +666,7 @@ function bindEvents() {
     document.getElementById("fileInput").click();
   });
 
-  // --- ICON CUSTOMIZATION EVENTS ---
+  // Icon Customization
   document.querySelectorAll(".icon-type-option").forEach((opt) => {
     opt.addEventListener("click", (e) => {
       const type = e.target.dataset.type;
@@ -690,21 +677,31 @@ function bindEvents() {
   document.getElementById("editTokenIconUrl").addEventListener("input", (e) => {
     document.getElementById("iconPreview").src = e.target.value || "icon.png";
   });
+  
+  // Also bind manual URL input preview (optional, but good UX)
+  const manualUrlInput = document.getElementById("manualIconUrl");
+  if(manualUrlInput) {
+      manualUrlInput.addEventListener("input", (e) => {
+          document.getElementById("manualIconPreview").src = e.target.value || "icon.png";
+      });
+  }
 
-  document
-    .getElementById("iconFileInput")
-    .addEventListener("change", async (e) => {
+  // Handle both file inputs (manual and edit)
+  const handleIconUpload = async (e, previewId) => {
       const file = e.target.files[0];
       if (file) {
         try {
           const base64 = await resizeImage(file, 128, 128);
           currentIconCustomBase64 = base64;
-          document.getElementById("iconPreview").src = base64;
+          document.getElementById(previewId).src = base64;
         } catch (err) {
           showAlert("Erro", "Falha ao processar imagem.", "❌");
         }
       }
-    });
+  };
+
+  document.getElementById("iconFileInput").addEventListener("change", (e) => handleIconUpload(e, "iconPreview"));
+  document.getElementById("manualIconFile").addEventListener("change", (e) => handleIconUpload(e, "manualIconPreview"));
 
   // Theme
   const btnTheme = document.getElementById("btnToggleTheme");
@@ -745,17 +742,13 @@ function bindEvents() {
   }
 
   // Cliques na lista
-  document
-    .getElementById("codes-list-container")
-    .addEventListener("click", (e) => {
+  document.getElementById("codes-list-container").addEventListener("click", (e) => {
       if (isReorderMode) return;
 
       const header = e.target.closest(".folder-header");
       if (header) {
         header.classList.toggle("closed");
-        const content = document.getElementById(
-          `folder-content-${header.dataset.id}`,
-        );
+        const content = document.getElementById(`folder-content-${header.dataset.id}`);
         if (content) content.classList.toggle("hidden");
         return;
       }
@@ -771,56 +764,33 @@ function bindEvents() {
       if (card) copyToken(card);
     });
 
-  // Import Action
-  document
-    .getElementById("fileInput")
-    .addEventListener("change", preProcessImport);
+  document.getElementById("fileInput").addEventListener("change", preProcessImport);
   document.getElementById("btnExport").addEventListener("click", exportData);
-  document
-    .getElementById("btnSortAlpha")
-    .addEventListener("click", sortVaultAlphabetically);
+  document.getElementById("btnSortAlpha").addEventListener("click", sortVaultAlphabetically);
 
-  // Manual Add
-  document
-    .getElementById("btnCloseManual")
-    .addEventListener("click", () =>
+  document.getElementById("btnCloseManual").addEventListener("click", () =>
       document.getElementById("manual-add-modal").classList.remove("active"),
     );
-  document
-    .getElementById("btnSaveManual")
-    .addEventListener("click", executeManualAdd);
+  document.getElementById("btnSaveManual").addEventListener("click", executeManualAdd);
 
-  // Tabs
-  document
-    .getElementById("nav-codes")
-    .addEventListener("click", () => switchTab("codes"));
-  document
-    .getElementById("nav-config")
-    .addEventListener("click", () => switchTab("config"));
+  document.getElementById("nav-codes").addEventListener("click", () => switchTab("codes"));
+  document.getElementById("nav-config").addEventListener("click", () => switchTab("config"));
 
-  // Configs
-  document
-    .getElementById("toggleSidePanel")
-    .addEventListener("change", async (e) => {
+  document.getElementById("toggleSidePanel").addEventListener("change", async (e) => {
       const useSidePanel = e.target.checked;
       await chrome.storage.local.set({ useSidePanel });
-    });
+  });
 
-  // Cloud Sync Toggle
-  document
-    .getElementById("toggleCloudSync")
-    .addEventListener("change", async (e) => {
+  document.getElementById("toggleCloudSync").addEventListener("change", async (e) => {
       useCloudSync = e.target.checked;
       await chrome.storage.local.set({ useCloudSync });
       updateSyncStatusUI(useCloudSync);
       if (useCloudSync) {
-        syncLocalToCloud(); // Force push initial
+        syncLocalToCloud();
       }
-    });
+  });
 
-  document
-    .getElementById("btnForceSync")
-    .addEventListener("click", async () => {
+  document.getElementById("btnForceSync").addEventListener("click", async () => {
       if (!useCloudSync) {
         showAlert("Sync Desativado", "Ative a sincronização primeiro.", "ℹ️");
         return;
@@ -832,9 +802,7 @@ function bindEvents() {
   const searchInput = document.getElementById("searchInput");
   const btnClear = document.getElementById("btnClearSearch");
   searchInput.addEventListener("input", () => {
-    document
-      .getElementById("searchWrapper")
-      .classList.toggle("active", !!searchInput.value);
+    document.getElementById("searchWrapper").classList.toggle("active", !!searchInput.value);
     renderCodesView();
   });
   btnClear.addEventListener("click", () => {
@@ -843,10 +811,8 @@ function bindEvents() {
     renderCodesView();
   });
 
-  // Config Actions
-  document
-    .getElementById("btnNewFolder")
-    .addEventListener("click", openNewFolderModal);
+  // Actions
+  document.getElementById("btnNewFolder").addEventListener("click", openNewFolderModal);
   document.getElementById("btnWipe").addEventListener("click", wipeData);
 
   // PIN
@@ -861,17 +827,11 @@ function bindEvents() {
     setTimeout(() => document.getElementById("newPinInput").focus(), 100);
   });
 
-  document
-    .getElementById("btnCancelPinSetup")
-    .addEventListener("click", () =>
+  document.getElementById("btnCancelPinSetup").addEventListener("click", () =>
       document.getElementById("pin-creation-modal").classList.remove("active"),
     );
-  document
-    .getElementById("btnSavePin")
-    .addEventListener("click", executeSetPin);
-  document
-    .getElementById("btnRemovePin")
-    .addEventListener("click", executeRemovePin);
+  document.getElementById("btnSavePin").addEventListener("click", executeSetPin);
+  document.getElementById("btnRemovePin").addEventListener("click", executeRemovePin);
 
   document.getElementById("btnToggleNewPin").addEventListener("click", () => {
     const inp1 = document.getElementById("newPinInput");
@@ -885,56 +845,32 @@ function bindEvents() {
     eyeClosed.classList.toggle("hidden", isPass);
   });
 
-  document
-    .getElementById("autoLockSelect")
-    .addEventListener("change", async (e) => {
+  document.getElementById("autoLockSelect").addEventListener("change", async (e) => {
       autoLockTime = parseInt(e.target.value);
       await chrome.storage.local.set({ autoLockTime });
       updateActivity();
     });
 
   // Folder Modals
-  document
-    .getElementById("btnCancelNewFolder")
-    .addEventListener("click", () =>
+  document.getElementById("btnCancelNewFolder").addEventListener("click", () =>
       document.getElementById("new-folder-modal").classList.remove("active"),
     );
-  document
-    .getElementById("btnSaveNewFolder")
-    .addEventListener("click", executeCreateFolder);
+  document.getElementById("btnSaveNewFolder").addEventListener("click", executeCreateFolder);
 
-  document
-    .getElementById("btnCloseFolder")
-    .addEventListener("click", closeFolderModal);
-  document
-    .getElementById("btnDeleteFolder")
-    .addEventListener("click", deleteCurrentFolder);
-  document
-    .getElementById("editFolderName")
-    .addEventListener("input", updateFolderName);
-  document
-    .getElementById("filterFolderItems")
-    .addEventListener("input", renderFolderChecklist);
-  document
-    .getElementById("btnToggleSelectAll")
-    .addEventListener("click", toggleSelectAllFolderItems);
+  document.getElementById("btnCloseFolder").addEventListener("click", closeFolderModal);
+  document.getElementById("btnDeleteFolder").addEventListener("click", deleteCurrentFolder);
+  document.getElementById("editFolderName").addEventListener("input", updateFolderName);
+  document.getElementById("filterFolderItems").addEventListener("input", renderFolderChecklist);
+  document.getElementById("btnToggleSelectAll").addEventListener("click", toggleSelectAllFolderItems);
 
   // Token Modal
-  document
-    .getElementById("btnCloseToken")
-    .addEventListener("click", () =>
+  document.getElementById("btnCloseToken").addEventListener("click", () =>
       document.getElementById("token-modal").classList.remove("active"),
     );
-  document
-    .getElementById("btnSaveToken")
-    .addEventListener("click", saveTokenChanges);
-  document
-    .getElementById("btnDeleteToken")
-    .addEventListener("click", deleteToken);
+  document.getElementById("btnSaveToken").addEventListener("click", saveTokenChanges);
+  document.getElementById("btnDeleteToken").addEventListener("click", deleteToken);
 
-  document
-    .getElementById("folders-manage-list")
-    .addEventListener("click", (e) => {
+  document.getElementById("folders-manage-list").addEventListener("click", (e) => {
       const item = e.target.closest(".folder-manage-item");
       if (item) openFolderModal(item.dataset.id);
     });
@@ -948,7 +884,7 @@ function bindEvents() {
 }
 
 // ======================================================
-// 7. IMPORTAÇÃO INTELIGENTE (2FAS & GENÉRICO)
+// 7. IMPORTAÇÃO INTELIGENTE (CORRIGIDA)
 // ======================================================
 
 async function preProcessImport(e) {
@@ -977,25 +913,21 @@ async function preProcessImport(e) {
   reader.readAsText(file);
 }
 
-// Analisa a estrutura do JSON e decide como importar
 function detectAndImport(json) {
   let importedCount = 0;
 
-  // 1. Caso 2FAS Backup (Detecta pela chave 'services' e 'groups')
-  if (
-    json.services &&
-    Array.isArray(json.services) &&
-    json.groups &&
-    Array.isArray(json.groups)
-  ) {
+  // Backup Próprio (2FA Lucena Vault)
+  if (json.app === "2FA Lucena Vault" && Array.isArray(json.vaultItems)) {
+    if(confirm("Restaurar backup completo? Isso irá substituir/mesclar os itens.")) {
+         restoreBackup(json);
+    }
+    return;
+  }
+  // 2FAS Backup
+  else if (json.services && Array.isArray(json.services) && json.groups) {
     importedCount = import2FAS(json);
   }
-  // 2. Caso Backup Próprio (2FA Lucena Vault)
-  else if (json.app === "2FA Lucena Vault" && Array.isArray(json.vaultItems)) {
-    restoreBackup(json);
-    return; // restoreBackup já lida com sucesso
-  }
-  // 3. Caso Genérico (Lista simples de itens)
+  // Genérico
   else {
     importedCount = importGeneric(json);
   }
@@ -1006,73 +938,52 @@ function detectAndImport(json) {
       switchTab("codes");
       renderCodesView();
       startClock();
-      showAlert(
-        "Importação Concluída",
-        `${importedCount} tokens importados com sucesso.`,
-        "✅",
-      );
+      showAlert("Importação Concluída", `${importedCount} tokens importados com sucesso.`, "✅");
     });
   } else {
-    showAlert(
-      "Aviso",
-      "Nenhum token válido encontrado ou todos já existiam.",
-      "⚠️",
-    );
+    showAlert("Aviso", "Nenhum token válido encontrado.", "⚠️");
   }
 }
 
-// Lógica Específica para 2FAS
 function import2FAS(data) {
   let count = 0;
   const existingSecrets = new Set(vaultItems.map((i) => i.secret));
 
-  // 1. Importar Grupos (Pastas)
+  // Importar Grupos
   if (data.groups) {
     data.groups.forEach((g) => {
-      // Verifica se a pasta já existe pelo ID ou Nome
       const exists = folders.some((f) => f.id === g.id || f.name === g.name);
       if (!exists) {
-        folders.push({
-          id: g.id, // Mantém o ID original (UUID) do 2FAS para linkar depois
-          name: g.name,
-        });
+        folders.push({ id: g.id, name: g.name });
       }
     });
   }
 
-  // 2. Importar Serviços (Tokens)
+  // Importar Serviços
   if (data.services) {
     data.services.forEach((s) => {
       if (!s.secret) return;
-
       const cleanSecret = s.secret.replace(/\s/g, "").toUpperCase();
       if (cleanSecret.length < 8) return;
 
-      // Evita duplicatas exatas
       if (!existingSecrets.has(cleanSecret)) {
-        // Tenta encontrar o folderId. Se não tiver no backup, vai pra unclassified
         let targetFolder = UNCLASSIFIED_ID;
-        if (s.groupId) {
-          if (folders.some((f) => f.id === s.groupId)) {
-            targetFolder = s.groupId;
-          }
+        if (s.groupId && folders.some((f) => f.id === s.groupId)) {
+          targetFolder = s.groupId;
         }
-
-        // --- CORREÇÃO DE MAPEAMENTO ---
-        // line1: Nome do Serviço (ex: Amazon)
-        // line2: Conta/Email (ex: user@gmail.com)
-        // issuer: Usado para buscar o ícone (ex: amazon)
 
         const serviceName = s.name || "Serviço";
         const accountName = (s.otp ? s.otp.account || s.otp.label : "") || "";
         const issuerName = (s.otp ? s.otp.issuer : "") || serviceName;
+        // Sanitiza para ícone
+        const cleanIssuer = issuerName.trim().replace(/\s/g, '');
 
         vaultItems.push({
           id: Math.random().toString(36).substr(2, 9),
           secret: cleanSecret,
-          line1: serviceName, // Título (Linha 1)
-          line2: accountName, // Subtítulo (Linha 2)
-          issuer: issuerName, // Para ícone apenas
+          line1: serviceName,
+          line2: accountName,
+          issuer: cleanIssuer, // Ícone sem espaços
           folderId: targetFolder,
           iconType: "auto",
           iconValue: null,
@@ -1082,87 +993,148 @@ function import2FAS(data) {
       }
     });
   }
-
   return count;
 }
 
-// Lógica Genérica (Fallback simplificado)
 function importGeneric(json) {
-  let count = 0;
-  const rawList = Array.isArray(json) ? json : json.items || json.tokens || [];
-  const existingSecrets = new Set(vaultItems.map((i) => i.secret));
+    let newItems = [];
+    let rawList = Array.isArray(json) ? json : (json.vaultItems || json.items || json.services || json.tokens || []);
+    const existingSecrets = new Set(vaultItems.map(i => i.secret));
+    
+    rawList.forEach(raw => {
+        let secret = null;
+        let urlIssuer = null;
+        let urlAccount = null;
 
-  rawList.forEach((item) => {
-    let secret = item.secret || item.key || (item.otp && item.otp.secret);
+        // Tenta extrair de objeto JSON padrão
+        if (typeof raw === 'object' && raw !== null) {
+            secret = raw.secret || raw.key || (raw.otp ? raw.otp.secret : null);
+        }
 
-    // Se for URL otpauth
-    if (!secret && typeof item === "string" && item.startsWith("otpauth://")) {
-      try {
-        const u = new URL(item);
-        secret = u.searchParams.get("secret");
-      } catch (e) {}
+        // Se for string ou se não achou secret no objeto, tenta parsear como URL otpauth
+        if ((!secret || typeof raw === 'string') && String(raw).trim().startsWith('otpauth://')) {
+             try {
+                 const u = new URL(typeof raw === 'string' ? raw : (raw.otpauth || ''));
+                 if (!secret) secret = u.searchParams.get('secret');
+                 
+                 const label = decodeURIComponent(u.pathname.replace(/^\/\w+\//, ''));
+                 if (label.includes(':')) {
+                     const parts = label.split(':');
+                     urlIssuer = parts[0].trim();
+                     urlAccount = parts[1].trim();
+                 } else {
+                     urlAccount = label.trim();
+                 }
+                 const qIssuer = u.searchParams.get('issuer');
+                 if (qIssuer) urlIssuer = qIssuer.trim();
+             } catch(e){}
+        }
+
+        if (secret) {
+             secret = secret.replace(/\s/g, '').toUpperCase();
+             if(!existingSecrets.has(secret)){
+                // Lógica de fallback
+                let issuer = (raw.issuer) || (raw.service) || (raw.otp && raw.otp.issuer) || urlIssuer || 'Serviço';
+                let account = (raw.label) || (raw.name) || (raw.account) || (raw.otp && raw.otp.account) || urlAccount || '';
+                
+                // Evita "undefined"
+                if (!issuer || String(issuer) === 'undefined') issuer = 'Serviço';
+                if (!account || String(account) === 'undefined') account = '';
+
+                const cleanIssuer = String(issuer).trim().replace(/\s/g, '');
+
+                newItems.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    secret: secret,
+                    line1: issuer,  // Título (Com espaços)
+                    line2: account, // Subtítulo
+                    issuer: cleanIssuer, // Emissor (Sem espaços, p/ Ícone)
+                    folderId: UNCLASSIFIED_ID,
+                    iconType: 'auto'
+                });
+                existingSecrets.add(secret);
+             }
+        }
+    });
+    
+    if(newItems.length > 0) {
+        vaultItems = [...vaultItems, ...newItems];
+        return newItems.length;
     }
-
-    if (secret) {
-      secret = secret.replace(/\s/g, "").toUpperCase();
-      if (!existingSecrets.has(secret)) {
-        // --- CORREÇÃO DE MAPEAMENTO ---
-        const title = item.label || item.name || item.issuer || "Importado";
-        const subtitle = item.account || item.email || "";
-        const issuerIcon = item.issuer || title;
-
-        vaultItems.push({
-          id: Math.random().toString(36).substr(2, 9),
-          secret: secret,
-          line1: title,
-          line2: subtitle,
-          issuer: issuerIcon,
-          folderId: UNCLASSIFIED_ID,
-        });
-        existingSecrets.add(secret);
-        count++;
-      }
-    }
-  });
-  return count;
+    return 0;
 }
 
 async function restoreBackup(data) {
-  if (Array.isArray(data.folders)) folders = data.folders;
-  else folders = [];
-  if (Array.isArray(data.customServices)) customServices = data.customServices;
-  else customServices = [];
-  if (Array.isArray(data.vaultItems)) vaultItems = data.vaultItems;
-  else vaultItems = [];
+    if (Array.isArray(data.folders)) folders = data.folders; else folders = [];
+    if (Array.isArray(data.customServices)) customServices = data.customServices; else customServices = [];
+    
+    if (Array.isArray(data.vaultItems)) {
+        // Mapeia e corrige itens restaurados com cuidado para não sobrescrever dados válidos
+        vaultItems = data.vaultItems.map(item => {
+            // 1. Título (line1)
+            let finalTitle = item.line1;
+            // Se line1 inválido, tenta usar issuer
+            if (!finalTitle || String(finalTitle) === 'undefined' || String(finalTitle).trim() === '') {
+                finalTitle = item.issuer;
+            }
+            if (!finalTitle || String(finalTitle) === 'undefined' || String(finalTitle).trim() === '') {
+                finalTitle = 'Serviço';
+            }
 
-  vaultPinHash = data.vaultPinHash || null;
-  autoLockTime = data.autoLockTime || 0;
+            // 2. Emissor (issuer) - Para Ícone
+            let finalIssuer = item.issuer;
+            if (!finalIssuer || String(finalIssuer) === 'undefined' || String(finalIssuer).trim() === '') {
+                finalIssuer = finalTitle;
+            }
+            
+            // Sanitização do Emissor (remove espaços para ícones melhores)
+            finalIssuer = String(finalIssuer || '').trim().replace(/\s/g, '');
+            if (!finalIssuer) finalIssuer = 'Servico';
 
-  await saveData();
+            // 3. Subtítulo (line2)
+            let finalSubtitle = item.line2;
+            if (!finalSubtitle || String(finalSubtitle) === 'undefined') {
+                finalSubtitle = '';
+            }
 
-  document.getElementById("fileInput").value = "";
-  document.getElementById("emptyState").classList.add("hidden");
-  switchTab("codes");
+            // 4. Garante ID
+            if(!item.id) item.id = Math.random().toString(36).substr(2, 9);
 
-  const storageData = await chrome.storage.local.get(["useSidePanel", "theme"]);
-  initApp(storageData);
+            // Aplica as correções no item
+            item.line1 = finalTitle;
+            item.line2 = finalSubtitle;
+            item.issuer = finalIssuer;
+            
+            return item;
+        });
+    } else {
+        vaultItems = [];
+    }
+    
+    vaultPinHash = data.vaultPinHash || null;
+    autoLockTime = data.autoLockTime || 0;
 
-  renderConfigView();
-
-  showAlert("Restaurado", `Backup restaurado com sucesso.`, "✅");
+    await saveData();
+    
+    document.getElementById('fileInput').value = '';
+    document.getElementById('emptyState').classList.add('hidden');
+    switchTab('codes');
+    
+    const storageData = await chrome.storage.local.get(['useSidePanel', 'theme']);
+    initApp(storageData);
+    
+    renderConfigView();
+    
+    showAlert("Restaurado", `Backup restaurado com sucesso.`, "✅");
 }
 
 // ======================================================
-// 8. RENDERIZAÇÃO & LÓGICA PRINCIPAL (Mantida)
+// 8. RENDERIZAÇÃO & LÓGICA PRINCIPAL
 // ======================================================
 
 function switchTab(tab) {
-  document
-    .querySelectorAll(".view-container")
-    .forEach((v) => v.classList.remove("active"));
-  document
-    .querySelectorAll(".nav-item")
-    .forEach((n) => n.classList.remove("active"));
+  document.querySelectorAll(".view-container").forEach((v) => v.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach((n) => n.classList.remove("active"));
 
   if (tab === "codes") {
     document.getElementById("view-codes").classList.add("active");
@@ -1195,14 +1167,11 @@ async function renderCodesView() {
   }
   document.getElementById("emptyState").classList.add("hidden");
 
-  // Sugestões inteligentes (baseado na aba ativa)
+  // Sugestões inteligentes
   let suggestedItems = [];
   if (!query) {
     try {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.url && !tab.url.startsWith("chrome://")) {
         const hostname = new URL(tab.url).hostname.toLowerCase();
         suggestedItems = vaultItems
@@ -1215,7 +1184,7 @@ async function renderCodesView() {
               return hostname.includes(clean);
             });
           })
-          .slice(0, 2); // Pega até 2 itens
+          .slice(0, 2); 
       }
     } catch (e) {}
   }
@@ -1225,11 +1194,7 @@ async function renderCodesView() {
     const cardsHtml = suggestedItems
       .map((item) => {
         let cardHtml = createCard(item);
-        // Injeta a classe 'suggested' no HTML do card
-        return cardHtml.replace(
-          'class="token-card',
-          'class="token-card suggested',
-        );
+        return cardHtml.replace('class="token-card', 'class="token-card suggested');
       })
       .join("");
 
@@ -1245,9 +1210,8 @@ async function renderCodesView() {
   grouped[UNCLASSIFIED_ID] = { name: "Não Classificados", items: [] };
 
   visible.forEach((item) => {
-    const fid = item.folderId || UNCLASSIFIED_ID;
-    if (grouped[fid]) grouped[fid].items.push(item);
-    else grouped[UNCLASSIFIED_ID].items.push(item);
+    const fid = item.folderId && grouped[item.folderId] ? item.folderId : UNCLASSIFIED_ID;
+    grouped[fid].items.push(item);
   });
 
   let html = "";
@@ -1292,17 +1256,12 @@ function getIconImgTag(issuer, iconType, iconValue) {
   if (!issuer) return `<img src="icon.png" class="service-img">`;
 
   let name = issuer.trim().toLowerCase();
-  let remoteUrl;
-
-  if (name.includes(".") && !name.includes(" ")) {
-    const cleanDomain = name.replace(/^https?:\/\//, "").replace(/\/$/, "");
-    remoteUrl = `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${cleanDomain}&size=64`;
-  } else {
-    // Nova Lógica: Remove espaços para melhorar detecção de ícones (ex: "Epic Games" -> "epicgames")
-    const cleanName = name.replace(/\s+/g, "");
-    const domainGuess = `${cleanName}.com`;
-    remoteUrl = `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domainGuess}&size=64`;
-  }
+  // Limpa espaços no nome para URL
+  const cleanName = name.replace(/\s+/g, "");
+  // Assume .com como padrão se não houver domínio
+  const domain = cleanName.includes(".") ? cleanName : `${cleanName}.com`;
+  const remoteUrl = `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=64`;
+  
   return `<img src="icon.png" data-src="${remoteUrl}" class="service-img">`;
 }
 
@@ -1313,12 +1272,7 @@ function loadDynamicIcons() {
     if (!remoteUrl) return;
     const remote = new Image();
     remote.src = remoteUrl;
-    remote.onload = () => {
-      img.src = remoteUrl;
-    };
-    remote.onerror = () => {
-      /* Silencioso se falhar */
-    };
+    remote.onload = () => { img.src = remoteUrl; };
   });
 }
 
@@ -1326,11 +1280,8 @@ function createCard(item) {
   const draggableClass = isReorderMode ? "draggable-item" : "";
   let type = item.iconType || (item.isDirect ? "url" : "auto");
   let value = item.iconValue || (item.isDirect ? item.issuer : null);
-
+  // Usa 'issuer' (sem espaços) para gerar o ícone, mas mostra 'line1' (título) no texto
   const imgTag = getIconImgTag(item.issuer, type, value);
-
-  // Alteração solicitada: line1 = Título, line2 = Subtítulo.
-  // Issuer é usado apenas para ícone.
 
   return `
     <div class="token-card ${draggableClass}" data-id="${item.id}" data-secret="${item.secret}">
@@ -1379,44 +1330,27 @@ function attachDragListeners(container) {
   cards.forEach((card) => {
     const handle = card.querySelector(".drag-handle");
     if (handle) {
-      handle.addEventListener("mousedown", () =>
-        card.setAttribute("draggable", "true"),
-      );
-      handle.addEventListener("mouseup", () =>
-        card.setAttribute("draggable", "false"),
-      );
+      handle.addEventListener("mousedown", () => card.setAttribute("draggable", "true"));
+      handle.addEventListener("mouseup", () => card.setAttribute("draggable", "false"));
       handle.addEventListener("mouseleave", () =>
-        setTimeout(() => {
-          if (!card.classList.contains("dragging"))
-            card.setAttribute("draggable", "false");
-        }, 100),
+        setTimeout(() => { if (!card.classList.contains("dragging")) card.setAttribute("draggable", "false"); }, 100)
       );
     }
-
     card.addEventListener("dragstart", (e) => {
       card.classList.add("dragging");
       e.dataTransfer.effectAllowed = "move";
     });
-
     card.addEventListener("dragend", async () => {
       card.classList.remove("dragging");
       card.setAttribute("draggable", "false");
-
-      const newOrderIds = Array.from(
-        document.querySelectorAll(".token-card"),
-      ).map((c) => c.dataset.id);
+      const newOrderIds = Array.from(document.querySelectorAll(".token-card")).map((c) => c.dataset.id);
       const newItemList = [];
       newOrderIds.forEach((id) => {
         const item = vaultItems.find((i) => i.id === id);
         if (item) {
-          const parentContent = document
-            .querySelector(`.token-card[data-id="${id}"]`)
-            .closest(".folder-content");
+          const parentContent = document.querySelector(`.token-card[data-id="${id}"]`).closest(".folder-content");
           if (parentContent) {
-            const folderSectionId = parentContent.id.replace(
-              "folder-content-",
-              "",
-            );
+            const folderSectionId = parentContent.id.replace("folder-content-", "");
             item.folderId = folderSectionId;
           }
           newItemList.push(item);
@@ -1435,13 +1369,7 @@ function attachDragListeners(container) {
     if (!draggable) return;
     const targetFolder = e.target.closest(".folder-content");
     if (!targetFolder) return;
-
-    // Grid Logic: pass X and Y
-    const afterElement = getDragAfterElement(
-      targetFolder,
-      e.clientX,
-      e.clientY,
-    );
+    const afterElement = getDragAfterElement(targetFolder, e.clientX, e.clientY);
     if (afterElement == null) {
       targetFolder.appendChild(draggable);
     } else {
@@ -1451,17 +1379,13 @@ function attachDragListeners(container) {
 }
 
 function getDragAfterElement(container, x, y) {
-  const draggableElements = [
-    ...container.querySelectorAll(".token-card:not(.dragging)"),
-  ];
-
+  const draggableElements = [...container.querySelectorAll(".token-card:not(.dragging)")];
   return draggableElements.reduce(
     (closest, child) => {
       const box = child.getBoundingClientRect();
       const boxCenterX = box.left + box.width / 2;
       const boxCenterY = box.top + box.height / 2;
       const dist = Math.hypot(x - boxCenterX, y - boxCenterY);
-
       if (dist < closest.offset) {
         return { offset: dist, element: child };
       } else {
@@ -1520,8 +1444,7 @@ function openTokenModal(id) {
   let value = item.iconValue || (item.isDirect ? item.issuer : null);
 
   setEditIconType(type);
-  document.getElementById("editTokenIconUrl").value =
-    type === "url" ? value : "";
+  document.getElementById("editTokenIconUrl").value = type === "url" ? value : "";
 
   if (type === "custom" && value) {
     document.getElementById("iconPreview").src = value;
@@ -1529,12 +1452,10 @@ function openTokenModal(id) {
   } else if (type === "url" && value) {
     document.getElementById("iconPreview").src = value;
   } else {
-    // Preview auto (hack simples)
+    // Preview auto
     let imgTag = getIconImgTag(item.issuer, "auto", null);
-    // Extract src from string tag for preview
     const match = imgTag.match(/src="([^"]+)"/);
     const dataMatch = imgTag.match(/data-src="([^"]+)"/);
-
     if (dataMatch && dataMatch[1]) {
       document.getElementById("iconPreview").src = dataMatch[1];
     } else if (match && match[1]) {
@@ -1558,18 +1479,27 @@ function openTokenModal(id) {
 
 function setEditIconType(type) {
   currentIconType = type;
+  
+  // Atualiza visual dos botões (abas)
   document.querySelectorAll(".icon-type-option").forEach((opt) => {
     opt.classList.toggle("active", opt.dataset.type === type);
   });
-  document
-    .getElementById("iconInputAuto")
-    .classList.toggle("hidden", type !== "auto");
-  document
-    .getElementById("iconInputUrl")
-    .classList.toggle("hidden", type !== "url");
-  document
-    .getElementById("iconInputCustom")
-    .classList.toggle("hidden", type !== "custom");
+
+  // Helper para mostrar/esconder elemento se ele existir
+  const toggle = (id, show) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("hidden", !show);
+  };
+
+  // Elementos do Modal de Edição (IDs únicos no HTML)
+  toggle("iconInputAuto", type === "auto");
+  toggle("editTokenIconInputUrl", type === "url");
+  toggle("iconInputCustom", type === "custom");
+
+  // Elementos do Modal de Adição Manual (IDs únicos no HTML)
+  toggle("manualIconInputAuto", type === "auto");
+  toggle("manualIconInputUrl", type === "url");
+  toggle("manualIconInputCustom", type === "custom");
 }
 
 async function saveTokenChanges() {
@@ -1612,13 +1542,10 @@ function renderConfigView() {
   const list = document.getElementById("folders-manage-list");
 
   if (folders.length === 0) {
-    list.innerHTML =
-      '<div style="padding:20px; text-align:center; font-size:12px; color:var(--text-sub); background:var(--bg-input); border-radius:8px; border:1px dashed var(--border); margin-top:12px;">Nenhuma pasta criada.</div>';
+    list.innerHTML = '<div style="padding:20px; text-align:center; font-size:12px; color:var(--text-sub); background:var(--bg-input); border-radius:8px; border:1px dashed var(--border); margin-top:12px;">Nenhuma pasta criada.</div>';
   } else {
-    list.innerHTML =
-      `<div class="folder-manage-list">` +
-      folders
-        .map((f) => {
+    list.innerHTML = `<div class="folder-manage-list">` +
+      folders.map((f) => {
           const count = vaultItems.filter((i) => i.folderId === f.id).length;
           return `
           <div class="folder-manage-item" data-id="${f.id}">
@@ -1628,9 +1555,7 @@ function renderConfigView() {
               </div>
               <svg class="folder-arrow-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </div>`;
-        })
-        .join("") +
-      `</div>`;
+        }).join("") + `</div>`;
   }
   updatePinConfigUI();
 }
@@ -1656,23 +1581,12 @@ async function executeCreateFolder() {
 }
 
 async function wipeData() {
-  if (
-    await showConfirm(
-      "Apagar Tudo?",
-      "Isso removerá todas as contas e pastas permanentemente.",
-      true,
-    )
-  ) {
+  if (await showConfirm("Apagar Tudo?", "Isso removerá todas as contas e pastas permanentemente.", true)) {
     vaultItems = [];
     folders = [];
     vaultPinHash = null;
     autoLockTime = 0;
-    await chrome.storage.local.set({
-      vaultItems,
-      folders,
-      vaultPinHash,
-      autoLockTime,
-    });
+    await chrome.storage.local.set({ vaultItems, folders, vaultPinHash, autoLockTime });
     if (useCloudSync) await chrome.storage.sync.clear();
     location.reload();
   }
@@ -1692,33 +1606,25 @@ function openFolderModal(fid) {
 
 function renderFolderChecklist() {
   const list = document.getElementById("folder-items-checklist");
-  const filter = document
-    .getElementById("filterFolderItems")
-    .value.toLowerCase();
-  const visible = vaultItems
-    .filter((i) => {
-      const matchText = (i.line1 + " " + i.line2)
-        .toLowerCase()
-        .includes(filter);
+  const filter = document.getElementById("filterFolderItems").value.toLowerCase();
+  const visible = vaultItems.filter((i) => {
+      const matchText = (i.line1 + " " + i.line2).toLowerCase().includes(filter);
       const belongsHere = i.folderId === curFolderId;
       const isFree = !i.folderId || i.folderId === UNCLASSIFIED_ID;
       return matchText && (belongsHere || isFree);
-    })
-    .sort((a, b) => a.line1.localeCompare(b.line1));
+    }).sort((a, b) => a.line1.localeCompare(b.line1));
 
-  list.innerHTML = visible
-    .map((item) => {
+  list.innerHTML = visible.map((item) => {
       const checked = item.folderId === curFolderId ? "checked" : "";
       return `
-        <label class="check-item">
-            <input type="checkbox" ${checked} data-tid="${item.id}">
+        <label class="check-item" style="display:flex; padding:8px; align-items:center;">
+            <input type="checkbox" ${checked} data-tid="${item.id}" style="margin-right:10px;">
             <div style="flex:1">
                 <div style="font-weight:600; font-size:13px;">${item.line1}</div>
                 <div style="font-size:11px; color:#6B7280;">${item.line2}</div>
             </div>
         </label>`;
-    })
-    .join("");
+    }).join("");
 
   list.querySelectorAll("input").forEach((chk) => {
     chk.addEventListener("change", async (e) => {
@@ -1733,9 +1639,7 @@ function renderFolderChecklist() {
 
 async function toggleSelectAllFolderItems() {
   if (!curFolderId) return;
-  const filter = document
-    .getElementById("filterFolderItems")
-    .value.toLowerCase();
+  const filter = document.getElementById("filterFolderItems").value.toLowerCase();
   const visibleItems = vaultItems.filter((i) => {
     const matchText = (i.line1 + " " + i.line2).toLowerCase().includes(filter);
     const belongsHere = i.folderId === curFolderId;
@@ -1765,13 +1669,7 @@ function closeFolderModal() {
 }
 
 async function deleteCurrentFolder() {
-  if (
-    await showConfirm(
-      "Excluir Pasta?",
-      "Os itens voltarão para 'Não Classificados'.",
-      true,
-    )
-  ) {
+  if (await showConfirm("Excluir Pasta?", "Os itens voltarão para 'Não Classificados'.", true)) {
     vaultItems.forEach((i) => {
       if (i.folderId === curFolderId) i.folderId = UNCLASSIFIED_ID;
     });
@@ -1818,13 +1716,7 @@ async function executeSetPin() {
 }
 
 async function executeRemovePin() {
-  if (
-    await showConfirm(
-      "Remover PIN",
-      "Qualquer pessoa com acesso a este computador poderá ver seus códigos.",
-      true,
-    )
-  ) {
+  if (await showConfirm("Remover PIN", "Qualquer pessoa com acesso a este computador poderá ver seus códigos.", true)) {
     vaultPinHash = null;
     await chrome.storage.local.remove("vaultPinHash");
     updatePinConfigUI();
@@ -1836,9 +1728,7 @@ async function executeRemovePin() {
 function toggleAllFolders() {
   const headers = document.querySelectorAll(".folder-header");
   if (headers.length === 0) return;
-  const anyOpen = Array.from(headers).some(
-    (h) => !h.classList.contains("closed"),
-  );
+  const anyOpen = Array.from(headers).some((h) => !h.classList.contains("closed"));
   headers.forEach((h) => {
     const content = document.getElementById(`folder-content-${h.dataset.id}`);
     if (anyOpen) {
@@ -1856,17 +1746,9 @@ function toggleAllFolders() {
 }
 
 function sortVaultAlphabetically() {
-  showConfirm(
-    "Ordenar A-Z?",
-    "Isso reorganizará todos os seus tokens alfabeticamente.",
-    false,
-  ).then((yes) => {
+  showConfirm("Ordenar A-Z?", "Isso reorganizará todos os seus tokens alfabeticamente.", false).then((yes) => {
     if (yes) {
-      vaultItems.sort((a, b) =>
-        (a.line1 + a.line2)
-          .toLowerCase()
-          .localeCompare((b.line1 + b.line2).toLowerCase()),
-      );
+      vaultItems.sort((a, b) => (a.line1 + a.line2).toLowerCase().localeCompare((b.line1 + b.line2).toLowerCase()));
       saveData().then(() => {
         renderCodesView();
         showAlert("Sucesso", "Tokens ordenados de A a Z.", "✅");
@@ -1879,31 +1761,27 @@ function executeManualAdd() {
   const issuer = document.getElementById("manualIssuer").value.trim();
   const account = document.getElementById("manualAccount").value.trim();
   const iconIssuer = document.getElementById("manualIconIssuer").value.trim();
-  let secret = document
-    .getElementById("manualSecret")
-    .value.trim()
-    .replace(/\s/g, "")
-    .toUpperCase();
+  let secret = document.getElementById("manualSecret").value.trim().replace(/\s/g, "").toUpperCase();
 
   if (!secret) return showAlert("Erro", "A Chave Secreta é obrigatória.", "⚠️");
-  if (!/^[A-Z2-7=]+$/.test(secret))
-    return showAlert("Erro", "Chave Secreta inválida (use Base32).", "⚠️");
-  if (vaultItems.some((i) => i.secret === secret))
-    return showAlert("Aviso", "Este token já existe.", "⚠️");
+  if (!/^[A-Z2-7=]+$/.test(secret)) return showAlert("Erro", "Chave Secreta inválida (use Base32).", "⚠️");
+  if (vaultItems.some((i) => i.secret === secret)) return showAlert("Aviso", "Este token já existe.", "⚠️");
 
   // Icon handling
   let iconType = currentIconType;
   let iconValue = null;
-  if (iconType === "url")
-    iconValue = document.getElementById("manualIconUrl").value;
-  if (iconType === "custom") iconValue = currentIconCustomBase64; // assumindo que o input mudou o global
+  if (iconType === "url") iconValue = document.getElementById("manualIconUrl").value;
+  if (iconType === "custom") iconValue = currentIconCustomBase64;
+
+  // Sanitiza emissor para ícone
+  const cleanIssuer = (iconIssuer || issuer || 'Serviço').replace(/\s/g, '');
 
   vaultItems.push({
     id: Math.random().toString(36).substr(2, 9),
     secret: secret,
     line1: issuer || "Sem Título",
     line2: account || "",
-    issuer: iconIssuer || issuer || "Serviço",
+    issuer: cleanIssuer,
     folderId: UNCLASSIFIED_ID,
     iconType: iconType,
     iconValue: iconValue,
@@ -1920,7 +1798,7 @@ function executeManualAdd() {
 }
 
 async function exportData() {
-  // A lógica de exportação foi movida para performExport()
+    performExport(null);
 }
 
 function showConfirm(title, message, isDestructive = false) {
@@ -1940,22 +1818,12 @@ function showConfirm(title, message, isDestructive = false) {
     const cleanup = () => {
       modal.classList.remove("active");
       btnOk.removeEventListener("click", onOk);
-      document
-        .getElementById("btnConfirmCancel")
-        .removeEventListener("click", onCancel);
+      document.getElementById("btnConfirmCancel").removeEventListener("click", onCancel);
     };
-    const onOk = () => {
-      cleanup();
-      resolve(true);
-    };
-    const onCancel = () => {
-      cleanup();
-      resolve(false);
-    };
+    const onOk = () => { cleanup(); resolve(true); };
+    const onCancel = () => { cleanup(); resolve(false); };
     btnOk.addEventListener("click", onOk);
-    document
-      .getElementById("btnConfirmCancel")
-      .addEventListener("click", onCancel);
+    document.getElementById("btnConfirmCancel").addEventListener("click", onCancel);
   });
 }
 
@@ -1965,8 +1833,7 @@ function showAlert(title, message, icon = "ℹ️") {
   document.getElementById("alertMessage").innerText = message;
   document.getElementById("alertIcon").innerText = icon;
   modal.classList.add("active");
-  document.getElementById("btnAlertOk").onclick = () =>
-    modal.classList.remove("active");
+  document.getElementById("btnAlertOk").onclick = () => modal.classList.remove("active");
 }
 
 async function saveData() {
@@ -2018,11 +1885,9 @@ function refreshTokens() {
       const num = card.querySelector(".timer-num");
       if (num) num.innerText = remaining;
 
-      if (remaining <= 10) {
+      if (remaining <= 5) {
         card.classList.add("expiring");
-        const next = totp.generate({
-          timestamp: (Math.floor(Date.now() / 1000 / 30) + 1) * 30 * 1000,
-        });
+        const next = totp.generate({ timestamp: (Math.floor(Date.now() / 1000 / 30) + 1) * 30 * 1000 });
         const nextEl = card.querySelector(".val-next");
         if (nextEl) nextEl.innerText = next.slice(0, 3) + " " + next.slice(3);
       } else {

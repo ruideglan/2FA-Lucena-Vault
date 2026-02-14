@@ -3,13 +3,8 @@
   "name": "2FA Lucena Vault",
   "version": "3.6",
   "description": "Autenticador Pro com modo Híbrido e Segurança PIN.",
-  "permissions": [
-    "activeTab",
-    "storage",
-    "sidePanel",
-    "tabs",
-    "scripting"
-  ],
+  "permissions": ["activeTab", "storage", "sidePanel", "tabs", "scripting"],
+  "host_permissions": ["https://worldtimeapi.org/*"],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Abrir Cofre"

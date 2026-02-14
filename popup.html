@@ -802,15 +802,6 @@
         height: 20px;
       }
 
-      /* Timer resize for compact mode */
-      body.compact-mode .timer-box {
-        width: 36px;
-        height: 36px;
-      }
-      body.compact-mode .timer-num {
-        font-size: 12px;
-      }
-
       /* --- Config View --- */
       .settings-card {
         background: var(--bg-card);
@@ -971,6 +962,51 @@
       }
       .btn-nav-back:hover {
         background: var(--danger-light);
+      }
+
+      /* Header Actions NEW */
+      .btn-header-text {
+        background: none;
+        border: none;
+        color: var(--text-sub);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+      }
+      .btn-header-text:hover {
+        background: var(--bg-hover);
+        color: var(--text-main);
+      }
+      .btn-header-icon {
+        background: none;
+        border: none;
+        color: var(--text-sub);
+        cursor: pointer;
+        padding: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+      }
+      .btn-header-icon:hover {
+        background: var(--danger-light);
+        color: var(--danger-text);
+      }
+      .btn-header-primary {
+        background: var(--text-main);
+        color: var(--bg-surface);
+        border: none;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.2s;
+      }
+      .btn-header-primary:hover {
+        opacity: 0.9;
       }
 
       /* Toggles */
@@ -1721,8 +1757,9 @@
     <div id="manual-add-modal" class="modal bottom">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Novo Token</h3>
-          <button id="btnCloseManual" class="btn-nav-back">Cancelar</button>
+          <button id="btnCloseManual" class="btn-header-text">Cancelar</button>
+          <h3 style="font-size: 15px; margin: 0">Novo Token</h3>
+          <button id="btnSaveManual" class="btn-header-primary">Salvar</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -1762,26 +1799,69 @@
                 class="icon-preview-img"
               />
             </div>
-            <div class="form-group">
-              <label class="config-label">Emissor (Para Ícone Automático)</label
-              ><input
+
+            <div class="icon-type-selector">
+              <div
+                class="icon-type-option active"
+                id="manualOptAuto"
+                data-type="auto"
+              >
+                Auto
+              </div>
+              <div class="icon-type-option" id="manualOptUrl" data-type="url">
+                URL
+              </div>
+              <div
+                class="icon-type-option"
+                id="manualOptCustom"
+                data-type="custom"
+              >
+                Upload
+              </div>
+            </div>
+
+            <div
+              id="manualIconInputAuto"
+              style="
+                text-align: center;
+                font-size: 11px;
+                color: var(--text-sub);
+                padding: 8px;
+              "
+            >
+              <div class="form-group">
+                <label class="config-label">Emissor para Busca</label>
+                <input
+                  type="text"
+                  id="manualIconIssuer"
+                  class="form-input"
+                  placeholder="Ex: google"
+                />
+              </div>
+            </div>
+
+            <div id="manualIconInputUrl" class="hidden">
+              <input
                 type="text"
-                id="manualIconIssuer"
+                id="manualIconUrl"
                 class="form-input"
-                placeholder="Ex: google"
+                placeholder="https://..."
               />
             </div>
-            <div id="iconInputUrl" class="hidden">
-              <input type="text" id="manualIconUrl" class="form-input" />
+
+            <div
+              id="manualIconInputCustom"
+              class="hidden"
+              style="text-align: center"
+            >
+              <input
+                type="file"
+                id="manualIconFile"
+                accept="image/*"
+                style="font-size: 11px"
+              />
             </div>
           </div>
-          <button
-            id="btnSaveManual"
-            class="btn-full btn-new-folder"
-            style="margin-top: 20px"
-          >
-            Salvar
-          </button>
         </div>
       </div>
     </div>
@@ -1892,8 +1972,26 @@
     <div id="token-modal" class="modal bottom">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Editar Token</h3>
-          <button id="btnCloseToken" class="btn-nav-back">Cancelar</button>
+          <button id="btnCloseToken" class="btn-header-text">Cancelar</button>
+          <h3 style="font-size: 15px; margin: 0">Editar</h3>
+          <div style="display: flex; align-items: center; gap: 4px">
+            <button id="btnDeleteToken" class="btn-header-icon" title="Excluir">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path
+                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2h4a2 2 0 0 1 2 2v2"
+                ></path>
+              </svg>
+            </button>
+            <button id="btnSaveToken" class="btn-header-primary">Salvar</button>
+          </div>
         </div>
         <div class="modal-body">
           <input type="hidden" id="editTokenId" />
@@ -1931,7 +2029,7 @@
             >
               Usa o nome do Emissor para buscar o ícone.
             </div>
-            <div id="iconInputUrl" class="hidden">
+            <div id="editTokenIconInputUrl" class="hidden">
               <input
                 type="text"
                 id="editTokenIconUrl"
@@ -1962,22 +2060,6 @@
             <label class="config-label">Pasta</label
             ><select id="editTokenFolder" class="form-select"></select>
           </div>
-          <div style="display: flex; gap: 10px; margin-top: 20px">
-            <button
-              id="btnDeleteToken"
-              class="btn-full btn-danger"
-              style="flex: 1"
-            >
-              Excluir
-            </button>
-            <button
-              id="btnSaveToken"
-              class="btn-full btn-save-green"
-              style="flex: 2"
-            >
-              Salvar Alterações
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -1985,8 +2067,27 @@
     <div id="folder-modal" class="modal bottom">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Gerenciar Pasta</h3>
-          <button id="btnCloseFolder" class="btn-nav-back">Concluir</button>
+          <button id="btnCloseFolder" class="btn-header-text">Voltar</button>
+          <h3 style="font-size: 15px; margin: 0">Pasta</h3>
+          <button
+            id="btnDeleteFolder"
+            class="btn-header-icon"
+            title="Excluir Pasta"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path
+                d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2h4a2 2 0 0 1 2 2v2"
+              ></path>
+            </svg>
+          </button>
         </div>
         <div
           class="modal-body"
@@ -1996,30 +2097,6 @@
             <label class="config-label">Nome da Pasta</label>
             <div style="display: flex; gap: 8px">
               <input type="text" id="editFolderName" class="form-input" />
-              <button
-                id="btnDeleteFolder"
-                style="
-                  background: var(--danger-light);
-                  color: var(--danger-text);
-                  border: 1px solid var(--danger-border);
-                  border-radius: 8px;
-                  padding: 0 12px;
-                  cursor: pointer;
-                "
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                >
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path
-                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                  ></path>
-                </svg>
-              </button>
             </div>
           </div>
           <div

@@ -1,6 +1,6 @@
 // Define o comportamento inicial ao instalar/atualizar
 chrome.runtime.onInstalled.addListener(async () => {
-  // Padrão: Abrir no Painel Lateral (false = Popup)
+  // Padrão: Abrir no Painel Lateral (true)
   await chrome.storage.local.set({ useSidePanel: false });
   await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 });
